@@ -2,12 +2,12 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-COPY package.json server.mjs index.html ./
+COPY server.mjs index.html ./
 COPY src ./src
 COPY styles ./styles
 COPY icons ./icons
 COPY favicon ./favicon
-COPY rules ./rules
+COPY geo ./geo
 
 RUN mkdir -p /app/data
 
