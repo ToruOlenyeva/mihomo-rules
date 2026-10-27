@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Runtime data & local profiles
+data/
+node_modules/
+*.log
+.env
+.env.*

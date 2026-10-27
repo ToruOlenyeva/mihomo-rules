@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mihomo Constructor · Clash/Mihomo 与通用远程规则可视化构建器</title>
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("theme") || "system";
+          var isDark =
+            mode === "dark" ||
+            (mode === "system" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.setAttribute(
+            "data-theme",
+            isDark ? "dark" : "light"
+          );
+          document.documentElement.setAttribute("data-theme-mode", mode);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="styles/fonts.css" />
+    <link rel="stylesheet" href="styles/styles.css" />
+    <link
+      rel="icon"
+      href="favicon/favicon.svg"
+      type="image/svg+xml"
+      sizes="any"
+    />
+    <link rel="icon" href="favicon/favicon.ico" sizes="any" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="favicon/apple-touch-icon.png"
+    />
+    <link rel="manifest" href="favicon/site.webmanifest" />
+    <meta
+      name="theme-color"
+      content="#f8fafc"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#09090b"
+      media="(prefers-color-scheme: dark)"
+    />
+  </head>
+  <body>
+    <header class="brand-header">
+      <div class="brand-inner">
+        <img
+          class="brand-logo"
+          src="icons/logo.svg"
+          alt="Mihomo Constructor logo"
+          width="40"
+          height="40"
+        />
+        <div class="brand-text">
+          <div class="brand-title">Mihomo Constructor</div>
+          <div class="brand-subtitle" data-i18n="brandSubtitle">
+            Clash/Mihomo (YAML) 与通用远程规则 (INI) 可视化构建器
+          </div>
+        </div>
+      </div>
+      <div class="brand-actions">
+        <div class="theme-switcher" role="group" aria-label="主题切换">
+          <button
+            type="button"
+            class="theme-btn"
+            data-theme-value="light"
+            title="浅色模式"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+            </svg>
+            <span data-i18n="themeLight">浅色</span>
+          </button>
+          <button
+            type="button"
+            class="theme-btn"
+            data-theme-value="dark"
+            title="深色模式"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <span data-i18n="themeDark">深色</span>
+          </button>
+          <button
+            type="button"
+            class="theme-btn"
+            data-theme-value="system"
+            title="跟随系统"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            <span data-i18n="themeSystem">系统</span>
+          </button>
+        </div>
+        <div class="lang-control">
+          <button
+            id="langButton"
+            class="lang-button"
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span
+              class="lang-prefix"
+              aria-hidden="true"
+              data-i18n="languagePrefix"
+              >语言:</span
+            >
+            <span class="lang-current-flag" aria-hidden="true">ZH</span>
+            <span class="sr-only" data-i18n="languageLabel">语言</span>
+          </button>
+          <div id="langMenu" class="lang-menu" role="listbox"></div>
+        </div>
+        <a
+          class="brand-action"
+          href="https://github.com/raywari/mihomo-constructor"
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="Open project on GitHub"
+          data-i18n-aria="brandActionAria"
+        >
+          <img
+            class="brand-action-icon"
+            src="icons/github.svg"
+            alt="GitHub"
+            width="16"
+            height="16"
+          />
+          <span class="brand-action-label" data-i18n="brandActionLabel"
+            >GitHub</span
+          >
+        </a>
+      </div>
+    </header>
+    <div class="app">
+      <section class="card">
+        <div class="header">
+          <div class="dot"></div>
+          <div>
+            <h1 data-i18n="constructorTitle">构造器</h1>
+            <div class="sub" data-i18n="constructorSub">
+              节点链接、订阅源、代理分组与分流规则构建（支持输出 INI / YAML）
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="stack">
+            <!-- 配置导入与预设模板（可选工具区） -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2>配置导入与预设模板 (YAML / INI)</h2>
+                  <div class="sub">
+                    可选：在下拉栏切换已保存的配置或选择预设模板，也可直接上传本地配置文件
+                  </div>
+                </div>
+                <button class="danger" type="button" id="resetAllConfigBtn" style="flex: 0 0 auto">
+                  清空重置
+                </button>
+              </div>
+              <div class="row preset-toolbar-row">
+                <select id="iniPresetSelect"></select>
+                <button
+                  class="danger"
+                  type="button"
+                  id="deleteSavedProfileBtn"
+                  style="display: none"
+                >
+                  删除配置
+                </button>
+                <input
+                  type="file"
+                  id="localConfigFileInput"
+                  accept=".yaml,.yml,.ini,.txt,.conf"
+                  style="display: none"
+                />
+                <button class="primary" type="button" id="uploadConfigFileBtn">
+                  上传本地文件
+                </button>
+              </div>
+              <details class="OptionalSection">
+                <summary>或者：粘贴远程 URL 链接 / 粘贴配置文本导入 (YAML / INI)</summary>
+                <div class="stack" style="gap: 8px; margin-top: 8px">
+                  <textarea
+                    id="pasteIniText"
+                    class="small"
+                    placeholder="支持两种方式：&#10;1. 直接粘贴远程 .yaml / .ini 链接 (https://...)&#10;2. 直接粘贴 Clash/Mihomo (.yaml) 或 Subconverter (.ini) 完整配置文本…"
+                    style="min-height: 96px"
+                  ></textarea>
+                  <div style="display: flex; justify-content: flex-end">
+                    <button class="primary" type="button" id="parseIniTextBtn">
+                      识别并导入
+                    </button>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <!-- 原版模块 1：输入链接 (proxies) -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2 data-i18n="inputTitle">输入链接 (proxies)</h2>
+                  <div class="sub">
+                    可选：粘贴单节点分享链接（vless / vmess / trojan / ss / hy2 等），粘贴后自动实时生成
+                  </div>
+                </div>
+                <div class="row" style="flex: 0 0 auto">
+                  <button id="pasteDemoBtn" type="button" data-i18n="demoButton">
+                    示例
+                  </button>
+                  <button
+                    class="danger"
+                    id="clearBtn"
+                    type="button"
+                    data-i18n="clearButton"
+                  >
+                    清空
+                  </button>
+                </div>
+              </div>
+              <textarea
+                id="input"
+                class="small"
+                placeholder="vless://...&#10;vmess://...&#10;hy2://...&#10;ss://...&#10;trojan://..."
+              ></textarea>
+            </div>
+
+            <!-- 原版模块 2：节点订阅 (proxy-providers) -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2 data-i18n="subsTitle">节点订阅 (proxy-providers)</h2>
+                  <div class="sub" data-i18n="subsHint">
+                    可选：添加外部节点订阅源（仅在输出完整 YAML 配置时生成 proxy-providers 字段）
+                  </div>
+                </div>
+              </div>
+              <div class="group-card">
+                <div class="row">
+                  <input
+                    id="subsUrl"
+                    type="url"
+                    placeholder="在此粘贴订阅链接 (https://...)"
+                    data-i18n="subsPlaceholder"
+                    data-i18n-attr="placeholder"
+                  />
+                  <select id="subsFetchMode" title="拉取方式" style="max-width: 150px">
+                    <option value="DIRECT">DIRECT (直连拉取)</option>
+                    <option value="PROXY">PROXY (经代理拉取)</option>
+                  </select>
+                  <button id="addSubBtn" type="button" data-i18n="addSubButton">
+                    + 添加订阅
+                  </button>
+                </div>
+                <div
+                  id="subsList"
+                  class="listbox"
+                  style="max-height: 160px"
+                ></div>
+              </div>
+
+              <div class="switch-row">
+                <div>
+                  <div>
+                    <b data-i18n="advancedSubsTitle">高级订阅 (YAML)</b>
+                  </div>
+                  <div class="sub" data-i18n="advancedSubsHint">
+                    开启后将忽略上方列表，直接读取下方自定义 proxy-providers 文本
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="subsAdvancedToggle" />
+                  <div class="track"><div class="thumb"></div></div>
+                </label>
+              </div>
+              <textarea
+                id="subsAdvancedText"
+                class="small"
+                spellcheck="false"
+                style="display: none"
+              ></textarea>
+            </div>
+
+            <!-- 原版模块 3：代理分组 (proxy-groups / custom_proxy_group) -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2 data-i18n="groupsTitle">
+                    代理分组 (proxy-groups / custom_proxy_group)
+                  </h2>
+                  <div class="sub">
+                    定义客户端中的策略组（如手动选择、自动测速、故障转移）及节点正则匹配规则
+                  </div>
+                </div>
+                <div class="row" style="flex: 0 0 auto">
+                  <button
+                    id="addGroupBtn"
+                    type="button"
+                    class="primary"
+                    style="flex: 0 0 auto"
+                    data-i18n="addGroupButton"
+                  >
+                    + 添加分组
+                  </button>
+                  <button
+                    id="clearGroupsBtn"
+                    type="button"
+                    class="danger"
+                    style="flex: 0 0 auto"
+                  >
+                    清空分组
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="groupsContainer"
+                class="body"
+                style="padding: 0; gap: 10px"
+              ></div>
+
+              <div class="switch-row">
+                <div>
+                  <div>
+                    <b data-i18n="advancedGroupsTitle">高级分组 (YAML)</b>
+                  </div>
+                  <div class="sub" data-i18n="advancedGroupsHint">
+                    开启后将忽略上方可视化分组，直接使用纯文本 proxy-groups
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="groupsAdvancedToggle" />
+                  <div class="track"><div class="thumb"></div></div>
+                </label>
+              </div>
+              <textarea
+                id="groupsAdvancedText"
+                class="small"
+                spellcheck="false"
+                style="display: none"
+              ></textarea>
+            </div>
+
+            <!-- 原版模块 4：自定义单条规则 (rules) -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2 data-i18n="manualRulesTitle">自定义单条规则 (rules)</h2>
+                  <div class="sub" data-i18n="manualRulesSub">
+                    按域名、关键词、IP-CIDR、端口或进程名称添加高优先级分流规则
+                  </div>
+                </div>
+                <button
+                  id="addManualRuleBtn"
+                  type="button"
+                  class="primary"
+                  style="flex: 0 0 auto"
+                  data-i18n="manualRulesAddButton"
+                >
+                  + 添加规则
+                </button>
+              </div>
+              <div class="rules-toolbar">
+                <div class="row tight between" style="align-items: center">
+                  <select id="manualRuleType" style="max-width: 225px">
+                    <option value="DOMAIN-SUFFIX">DOMAIN-SUFFIX (域名后缀)</option>
+                    <option value="DOMAIN-KEYWORD">DOMAIN-KEYWORD (域名关键词)</option>
+                    <option value="DOMAIN">DOMAIN (完整域名)</option>
+                    <option value="IP-CIDR">IP-CIDR (IPv4 网段)</option>
+                    <option value="IP-CIDR6">IP-CIDR6 (IPv6 网段)</option>
+                    <option value="DST-PORT">DST-PORT (目标端口)</option>
+                    <option value="SRC-PORT">SRC-PORT (源端口)</option>
+                    <option value="IP-ASN">IP-ASN (自治系统号)</option>
+                    <option value="PROCESS-NAME">PROCESS-NAME (进程名称)</option>
+                    <option value="PROCESS-PATH">PROCESS-PATH (进程完整路径)</option>
+                  </select>
+                  <input
+                    id="manualRuleValue"
+                    type="text"
+                    placeholder="例如: google.com 或 192.168.1.0/24"
+                    data-i18n="manualRulesValuePlaceholder"
+                    data-i18n-attr="placeholder"
+                  />
+                  <select id="manualRuleAction" style="max-width: 200px"></select>
+                </div>
+              </div>
+              <div id="manualRulesList" class="listbox" style="max-height: 280px"></div>
+            </div>
+
+            <!-- 原版模块 5：远程规则集 (rule-providers / ruleset) -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2 data-i18n="ruleProvidersTitle">
+                    远程规则集 (rule-providers / ruleset)
+                  </h2>
+                  <div class="sub" data-i18n="ruleProvidersSub">
+                    引用外部维护的规则集文件（支持 .list 与 .yaml），并在右侧下拉框指定目标策略组
+                  </div>
+                </div>
+              </div>
+
+              <div class="rules-toolbar">
+                <div class="row">
+                  <input
+                    id="ruleProviderName"
+                    type="text"
+                    placeholder="规则集名称，例如 OpenAi"
+                    data-i18n="ruleProvidersNamePlaceholder"
+                    data-i18n-attr="placeholder"
+                  />
+                  <input
+                    id="ruleProviderUrl"
+                    type="url"
+                    placeholder="规则集 URL (https://...)"
+                    data-i18n="ruleProvidersUrlPlaceholder"
+                    data-i18n-attr="placeholder"
+                  />
+                </div>
+                <div class="row">
+                  <select id="ruleProviderBehavior">
+                    <option value="surge">Surge / ACL4SSR 规则列表 (.list)</option>
+                    <option value="classical">Clash 复合规则集 (classical)</option>
+                    <option value="domain">Clash 域名规则集 (domain)</option>
+                    <option value="ipcidr">Clash IP 网段规则集 (ipcidr)</option>
+                  </select>
+                  <select id="ruleProviderPolicy"></select>
+                  <button
+                    id="addRuleProviderBtn"
+                    type="button"
+                    style="flex: 0 0 auto"
+                    data-i18n="addRuleProviderButton"
+                  >
+                    + 添加规则集
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="ruleProvidersList"
+                class="listbox"
+                style="max-height: 320px"
+              ></div>
+            </div>
+
+            <!-- 原版模块 6：默认兜底与 GEOSITE / GEOIP 分类规则 -->
+            <div class="section">
+              <div class="section-title">
+                <div class="section-heading">
+                  <h2>默认兜底与地理分类规则 (MATCH / GEOSITE / GEOIP)</h2>
+                  <div class="sub" data-i18n="rulesSubtitle">
+                    配置未命中流量的兜底策略，以及按内置域名分类库 (GEOSITE) 与国家 IP 库 (GEOIP) 分流
+                  </div>
+                </div>
+              </div>
+
+              <div class="group-card match-card">
+                <div class="match-head">
+                  <div>
+                    <div class="eyebrow">MATCH / FINAL</div>
+                    <div class="match-title" data-i18n="matchTitle">
+                      兜底规则（未命中任何规则的流量走向）
+                    </div>
+                  </div>
+                  <select id="matchPolicy"></select>
+                </div>
+              </div>
+
+              <div class="rules-grid">
+                <div class="group-card rules-column">
+                  <div class="rules-head">
+                    <div class="title">
+                      <div class="eyebrow">GEOSITE</div>
+                      <h2 style="margin: 0" data-i18n="geositeTitle">
+                        域名分类库 (GEOSITE)
+                      </h2>
+                      <div class="sub" data-i18n="geositeFile">
+                        内置分类: geosite.txt
+                      </div>
+                    </div>
+                    <div
+                      class="row nowrap"
+                      style="flex: 0 0 auto; gap: 6px; align-items: center"
+                    >
+                      <button
+                        id="loadGeositeBtn"
+                        type="button"
+                        style="flex: 0 0 auto"
+                        data-i18n="geositeLoadButton"
+                      >
+                        加载
+                      </button>
+                      <span class="pill" id="geositeStatus">未加载</span>
+                    </div>
+                  </div>
+                  <div class="rules-toolbar">
+                    <div
+                      class="row between"
+                      style="align-items: flex-end; gap: 10px; flex-wrap: wrap"
+                    >
+                      <button
+                        id="geositeReset"
+                        class="ghost"
+                        type="button"
+                        style="flex: 0 0 auto"
+                        data-i18n="resetSelection"
+                      >
+                        重置所选
+                      </button>
+                    </div>
+                    <div class="row tight between" style="align-items: center">
+                      <input
+                        id="geositeSearch"
+                        type="text"
+                        placeholder="搜索 GEOSITE…"
+                        data-i18n="geositeSearch"
+                        data-i18n-attr="placeholder"
+                      />
+                    </div>
+                  </div>
+                  <div id="geositeList" class="listbox"></div>
+                  <button
+                    id="geositeShowMore"
+                    class="ghost show-more-btn"
+                    type="button"
+                    style="display: none"
+                    data-i18n="showMore"
+                  >
+                    显示更多
+                  </button>
+                </div>
+                <div class="group-card rules-column">
+                  <div class="rules-head">
+                    <div class="title">
+                      <div class="eyebrow">GEOIP</div>
+                      <h2 style="margin: 0" data-i18n="geoipTitle">
+                        国家与地区 IP 库 (GEOIP)
+                      </h2>
+                      <div class="sub" data-i18n="geoipFile">内置分类: geoip.txt</div>
+                    </div>
+                    <div
+                      class="row nowrap"
+                      style="flex: 0 0 auto; gap: 6px; align-items: center"
+                    >
+                      <button
+                        id="loadGeoipBtn"
+                        type="button"
+                        style="flex: 0 0 auto"
+                        data-i18n="geoipLoadButton"
+                      >
+                        加载
+                      </button>
+                      <span class="pill" id="geoipStatus">未加载</span>
+                    </div>
+                  </div>
+                  <div class="rules-toolbar">
+                    <div
+                      class="row between"
+                      style="align-items: flex-end; gap: 10px; flex-wrap: wrap"
+                    >
+                      <button
+                        id="geoipReset"
+                        class="ghost"
+                        type="button"
+                        style="flex: 0 0 auto"
+                        data-i18n="resetSelection"
+                      >
+                        重置所选
+                      </button>
+                    </div>
+                    <div class="row tight between" style="align-items: center">
+                      <input
+                        id="geoipSearch"
+                        type="text"
+                        placeholder="搜索 GEOIP…"
+                        data-i18n="geoipSearch"
+                        data-i18n-attr="placeholder"
+                      />
+                    </div>
+                  </div>
+                  <div id="geoipList" class="listbox"></div>
+                  <button
+                    id="geoipShowMore"
+                    class="ghost show-more-btn"
+                    type="button"
+                    style="display: none"
+                    data-i18n="showMore"
+                  >
+                    显示更多
+                  </button>
+                </div>
+              </div>
+
+              <div class="switch-row">
+                <div>
+                  <div>
+                    <b data-i18n="advancedRulesTitle">高级规则 (YAML)</b>
+                  </div>
+                  <div class="sub" data-i18n="advancedRulesHint">
+                    开启后将忽略上方可视化规则，直接使用纯文本 rules
+                  </div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="rulesAdvancedToggle" />
+                  <div class="track"><div class="thumb"></div></div>
+                </label>
+              </div>
+              <textarea
+                id="rulesAdvancedText"
+                class="small"
+                spellcheck="false"
+                style="display: none"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右侧：实时输出与优先级排序 -->
+      <section class="card-yaml">
+        <div class="header header-secondary">
+          <div class="dot" style="background: var(--accent-2)"></div>
+          <div>
+            <h1 data-i18n="outputTitle">生成的配置预览</h1>
+            <div class="sub" data-i18n="outputSub">
+              实时生成通用远程分流配置 (.ini) 或 Mihomo 完整配置 (.yaml)，支持发布为固定远程 URL
+            </div>
+          </div>
+        </div>
+
+        <div class="body body-output">
+          <!-- 格式切换选项卡 -->
+          <div class="format-tabs">
+            <button type="button" class="format-tab active" id="tabFormatIni">
+              INI 格式 (Subconverter 远程规则)
+            </button>
+            <button type="button" class="format-tab" id="tabFormatYaml">
+              YAML 格式 (Mihomo 完整配置)
+            </button>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="output-toolbar">
+            <div class="row output-actions">
+              <input
+                id="profileNameInput"
+                type="text"
+                placeholder="配置名称 (如: 主力分流)"
+              />
+              <button class="primary" type="button" id="publishIniBtn">
+                保存配置
+              </button>
+              <button class="good" type="button" id="copyBtn" data-i18n="copyButton">
+                复制配置
+              </button>
+              <button type="button" id="downloadBtn">
+                下载文件
+              </button>
+            </div>
+          </div>
+
+          <!-- 固定远程规则地址展示栏 -->
+          <div class="remote-url-banner" id="remoteUrlBanner">
+            <div class="remote-url-info">
+              <div id="remoteUrlBannerLabel" class="remote-url-label">
+                远程 INI 规则直链（保存后永久有效，可填入订阅转换远程规则）：
+              </div>
+              <div class="remote-url-code" id="remoteIniUrlText">
+                http://127.0.0.1:8089/rules.ini
+              </div>
+            </div>
+            <button type="button" class="good" id="copyRemoteUrlBtn">
+              复制远程地址
+            </button>
+          </div>
+
+          <div class="output-toolbar">
+            <div class="status" id="status">
+              <span class="pill">就绪</span><span id="statusText">—</span>
+            </div>
+          </div>
+
+          <div class="output-toolbar">
+            <div class="group-card">
+              <div class="section-title">
+                <div class="section-heading">
+                  <div class="eyebrow" data-i18n="ruleOrderEyebrow">
+                    规则匹配优先级
+                  </div>
+                  <h2 style="margin: 0" data-i18n="ruleOrderTitle">
+                    规则顺序（自上而下依次匹配）
+                  </h2>
+                  <div class="sub" data-i18n="ruleOrderSub">
+                    按住规则行可上下拖动排序，右侧按钮支持一键置顶或置底
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="ghost chip-btn"
+                  id="toggleRuleOrderExpandBtn"
+                  style="flex: 0 0 auto"
+                >
+                  展开列表
+                </button>
+              </div>
+              <div
+                id="rulesOrderList"
+                class="listbox"
+              ></div>
+            </div>
+          </div>
+          <pre id="output" data-placeholder="true"></pre>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
