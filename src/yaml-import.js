@@ -191,6 +191,21 @@ export function parseYamlToState(yamlContent) {
     }
 
     if (currentSection === "proxy-groups") {
+      const isSubListItem =
+        currentObj &&
+        (currentSubKey === "proxies" || currentSubKey === "use") &&
+        trimmed.startsWith("- ") &&
+        !/^-\s*\{/.test(trimmed) &&
+        !/^-\s*(name|type|icon|url|interval|tolerance|filter|exclude-filter|include-all|include-all-proxies|proxies|use|lazy|hidden|strategy)\s*:/.test(
+          trimmed
+        );
+
+      if (isSubListItem) {
+        const itemVal = unquoteYaml(trimmed.slice(2));
+        if (itemVal) currentObj[currentSubKey].push(itemVal);
+        continue;
+      }
+
       if (trimmed.startsWith("- ")) {
         const rest = trimmed.slice(2).trim();
         currentSubKey = "";
@@ -204,7 +219,10 @@ export function parseYamlToState(yamlContent) {
             use: Array.isArray(parsed.use) ? parsed.use : [],
             filter: parsed.filter || "",
             includeAll:
-              parsed["include-all"] === "true" || parsed["include-all"] === true,
+              parsed["include-all"] === "true" ||
+              parsed["include-all"] === true ||
+              parsed["include-all-proxies"] === "true" ||
+              parsed["include-all-proxies"] === true,
             url: parsed.url || "",
             interval: Number(parsed.interval) || 300,
             tolerance: Number(parsed.tolerance) || 150,
@@ -236,11 +254,6 @@ export function parseYamlToState(yamlContent) {
       }
 
       if (currentObj) {
-        if (trimmed.startsWith("- ") && (currentSubKey === "proxies" || currentSubKey === "use")) {
-          const itemVal = unquoteYaml(trimmed.slice(2));
-          if (itemVal) currentObj[currentSubKey].push(itemVal);
-          continue;
-        }
         const kv = trimmed.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
         if (kv) {
           const k = kv[1];
@@ -258,7 +271,7 @@ export function parseYamlToState(yamlContent) {
             else if (k === "type") currentObj.type = unquoteYaml(v) || "select";
             else if (k === "icon") currentObj.icon = unquoteYaml(v);
             else if (k === "filter") currentObj.filter = unquoteYaml(v);
-            else if (k === "include-all")
+            else if (k === "include-all" || k === "include-all-proxies")
               currentObj.includeAll = v === "true" || v === "True";
             else if (k === "url") currentObj.url = unquoteYaml(v);
             else if (k === "interval")

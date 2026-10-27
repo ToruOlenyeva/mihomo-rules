@@ -136,7 +136,7 @@ export function emitGroupsYaml() {
     emitLine(lines, "    type: " + g.type, 0);
     if (g.icon) emitLine(lines, "  icon: " + g.icon, 0);
 
-    const list = uniq([...(g.proxies || []), ...(g.manual || [])]);
+    const list = uniq([...(g.manual || []), ...(g.proxies || [])]);
     if (list.length) {
       emitLine(lines, "    proxies:", 0);
       list.forEach((pn) => emitLine(lines, "    - " + yamlQuote(pn), 0));
@@ -148,6 +148,9 @@ export function emitGroupsYaml() {
     }
 
     if (g.filter) {
+      if (!(g.proxies && g.proxies.length) && !(g.useSubs && g.useSubs.length)) {
+        emitLine(lines, "    include-all: true", 0);
+      }
       emitLine(lines, "    filter: " + yamlQuote(g.filter), 0);
     }
     if (g.type === "url-test" || g.type === "fallback" || g.type === "load-balance") {
