@@ -1,6 +1,6 @@
 services:
   mihomo-rules:
-    build: .
+    image: ghcr.io/toruolenyeva/mihomo-rules:latest
     container_name: mihomo-rules
     restart: unless-stopped
     ports:
