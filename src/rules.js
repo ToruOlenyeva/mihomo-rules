@@ -340,7 +340,11 @@ export function rebuildRuleOrderFromState() {
 }
 
 let _dragSourceIndex = null;
+let _dragSourceBundlePolicy = null;
+let _dragSourceBundleChild = null;
 let _lastMovedRuleId = null;
+let _ruleOrderGroupMode = true;
+const _expandedPolicyBundles = new Set();
 
 function clearDragIndicators() {
   if (!ruleOrderListEl) return;
@@ -351,7 +355,147 @@ function clearDragIndicators() {
     });
 }
 
+function buildPolicyBundles(items) {
+  const bundles = [];
+  const map = new Map();
+  let matchEntry = null;
+
+  for (const entry of items) {
+    if (entry.kind === "MATCH") {
+      matchEntry = entry;
+      continue;
+    }
+    const policy = entry.policy || "DIRECT";
+    let bundle = map.get(policy);
+    if (!bundle) {
+      bundle = { policy, entries: [] };
+      map.set(policy, bundle);
+      bundles.push(bundle);
+    }
+    bundle.entries.push(entry);
+  }
+  return { bundles, matchEntry };
+}
+
+function applyBundlesToRuleOrder(bundles, matchEntry) {
+  const next = [];
+  for (const b of bundles) {
+    for (const e of b.entries) {
+      next.push(e);
+    }
+  }
+  if (matchEntry) {
+    next.push(matchEntry);
+  }
+  state.ruleOrder = next;
+}
+
+function movePolicyBundleByDrop(fromPolicy, targetPolicy, insertAfter) {
+  const items =
+    Array.isArray(state.ruleOrder) && state.ruleOrder.length
+      ? state.ruleOrder
+      : (state.ruleOrder = buildRuleEntriesArray());
+
+  const { bundles, matchEntry } = buildPolicyBundles(items);
+  const fromIdx = bundles.findIndex((b) => b.policy === fromPolicy);
+  const targetIdx = bundles.findIndex((b) => b.policy === targetPolicy);
+  if (fromIdx === -1 || targetIdx === -1 || fromIdx === targetIdx) return;
+
+  let dest = insertAfter ? targetIdx + 1 : targetIdx;
+  if (fromIdx < dest) dest -= 1;
+  dest = Math.max(0, Math.min(bundles.length - 1, dest));
+
+  const [moved] = bundles.splice(fromIdx, 1);
+  bundles.splice(dest, 0, moved);
+
+  applyBundlesToRuleOrder(bundles, matchEntry);
+  _lastMovedRuleId = `BUNDLE:${fromPolicy}`;
+  renderRuleOrder();
+  notifyStateChanged();
+}
+
+function movePolicyBundleToEdge(policy, direction) {
+  const items =
+    Array.isArray(state.ruleOrder) && state.ruleOrder.length
+      ? state.ruleOrder
+      : (state.ruleOrder = buildRuleEntriesArray());
+
+  const { bundles, matchEntry } = buildPolicyBundles(items);
+  const fromIdx = bundles.findIndex((b) => b.policy === policy);
+  if (fromIdx === -1 || bundles.length <= 1) return;
+
+  const target = direction === "top" ? 0 : bundles.length - 1;
+  if (fromIdx === target) return;
+
+  const [moved] = bundles.splice(fromIdx, 1);
+  bundles.splice(target, 0, moved);
+
+  applyBundlesToRuleOrder(bundles, matchEntry);
+  _lastMovedRuleId = `BUNDLE:${policy}`;
+  renderRuleOrder();
+  notifyStateChanged();
+}
+
+function moveRuleInsidePolicyBundle(policy, childIdx, direction) {
+  const items =
+    Array.isArray(state.ruleOrder) && state.ruleOrder.length
+      ? state.ruleOrder
+      : (state.ruleOrder = buildRuleEntriesArray());
+
+  const { bundles, matchEntry } = buildPolicyBundles(items);
+  const bundle = bundles.find((b) => b.policy === policy);
+  if (!bundle || bundle.entries.length <= 1) return;
+
+  const target = direction === "top" ? 0 : bundle.entries.length - 1;
+  if (childIdx === target || childIdx < 0 || childIdx >= bundle.entries.length) return;
+
+  const [moved] = bundle.entries.splice(childIdx, 1);
+  bundle.entries.splice(target, 0, moved);
+
+  applyBundlesToRuleOrder(bundles, matchEntry);
+  _lastMovedRuleId = moved.id;
+  renderRuleOrder();
+  notifyStateChanged();
+}
+
+function moveRuleInsidePolicyBundleByDrop(policy, fromIdx, targetIdx, insertAfter) {
+  const items =
+    Array.isArray(state.ruleOrder) && state.ruleOrder.length
+      ? state.ruleOrder
+      : (state.ruleOrder = buildRuleEntriesArray());
+
+  const { bundles, matchEntry } = buildPolicyBundles(items);
+  const bundle = bundles.find((b) => b.policy === policy);
+  if (!bundle || bundle.entries.length <= 1) return;
+  if (fromIdx < 0 || fromIdx >= bundle.entries.length) return;
+  if (targetIdx < 0 || targetIdx >= bundle.entries.length) return;
+
+  let dest = insertAfter ? targetIdx + 1 : targetIdx;
+  if (fromIdx < dest) dest -= 1;
+  dest = Math.max(0, Math.min(bundle.entries.length - 1, dest));
+  if (dest === fromIdx) return;
+
+  const [moved] = bundle.entries.splice(fromIdx, 1);
+  bundle.entries.splice(dest, 0, moved);
+
+  applyBundlesToRuleOrder(bundles, matchEntry);
+  _lastMovedRuleId = moved.id;
+  renderRuleOrder();
+  notifyStateChanged();
+}
+
 function initRuleOrderExpandAndDrag() {
+  const groupModeBtn = document.getElementById("toggleRuleOrderGroupModeBtn");
+  if (groupModeBtn && !groupModeBtn.dataset.bound) {
+    groupModeBtn.dataset.bound = "true";
+    groupModeBtn.addEventListener("click", () => {
+      _ruleOrderGroupMode = !_ruleOrderGroupMode;
+      groupModeBtn.classList.toggle("is-selected", _ruleOrderGroupMode);
+      groupModeBtn.textContent = _ruleOrderGroupMode ? "按策略合组" : "逐条排序";
+      renderRuleOrder();
+    });
+  }
+
   const expandBtn = document.getElementById("toggleRuleOrderExpandBtn");
   if (expandBtn && ruleOrderListEl && !expandBtn.dataset.bound) {
     expandBtn.dataset.bound = "true";
@@ -365,17 +509,24 @@ function initRuleOrderExpandAndDrag() {
     ruleOrderListEl.dataset.dragBound = "true";
 
     ruleOrderListEl.addEventListener("dragover", (e) => {
-      if (_dragSourceIndex == null) return;
+      if (
+        _dragSourceIndex == null &&
+        _dragSourceBundlePolicy == null &&
+        _dragSourceBundleChild == null
+      )
+        return;
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
 
-      // Auto-scroll when dragging near top or bottom edges of the list
       const listRect = ruleOrderListEl.getBoundingClientRect();
       const edgeThreshold = 46;
+      const scrollParent = ruleOrderListEl.classList.contains("is-expanded")
+        ? ruleOrderListEl.closest(".body") || ruleOrderListEl
+        : ruleOrderListEl;
       if (e.clientY - listRect.top < edgeThreshold) {
-        ruleOrderListEl.scrollTop -= 12;
+        scrollParent.scrollTop -= 12;
       } else if (listRect.bottom - e.clientY < edgeThreshold) {
-        ruleOrderListEl.scrollTop += 12;
+        scrollParent.scrollTop += 12;
       }
 
       const row = e.target.closest(".rule-order-item");
@@ -405,12 +556,61 @@ function initRuleOrderExpandAndDrag() {
     });
 
     ruleOrderListEl.addEventListener("drop", (e) => {
-      if (_dragSourceIndex == null) return;
+      if (
+        _dragSourceIndex == null &&
+        _dragSourceBundlePolicy == null &&
+        _dragSourceBundleChild == null
+      )
+        return;
       e.preventDefault();
+
+      const row = e.target.closest(".rule-order-item");
+      clearDragIndicators();
+
+      if (_dragSourceBundleChild != null) {
+        const { policy, childIdx } = _dragSourceBundleChild;
+        _dragSourceBundleChild = null;
+        if (!row || row.dataset.childPolicy !== policy) return;
+        const targetChildIdx = Number(row.dataset.childIndex);
+        if (!Number.isFinite(targetChildIdx)) return;
+        const rect = row.getBoundingClientRect();
+        const insertAfter = e.clientY >= rect.top + rect.height / 2;
+        moveRuleInsidePolicyBundleByDrop(
+          policy,
+          childIdx,
+          targetChildIdx,
+          insertAfter
+        );
+        return;
+      }
+
+      if (_dragSourceBundlePolicy != null) {
+        const fromPolicy = _dragSourceBundlePolicy;
+        _dragSourceBundlePolicy = null;
+        if (!row) return;
+        if (row.classList.contains("rule-order-match")) {
+          const items = Array.isArray(state.ruleOrder) ? state.ruleOrder : [];
+          const { bundles } = buildPolicyBundles(items);
+          if (bundles.length) {
+            movePolicyBundleByDrop(
+              fromPolicy,
+              bundles[bundles.length - 1].policy,
+              true
+            );
+          }
+          return;
+        }
+        const targetPolicy = row.dataset.bundlePolicy || row.dataset.childPolicy;
+        if (!targetPolicy) return;
+        const rect = row.getBoundingClientRect();
+        const insertAfter = e.clientY >= rect.top + rect.height / 2;
+        movePolicyBundleByDrop(fromPolicy, targetPolicy, insertAfter);
+        return;
+      }
+
       const fromIndex = _dragSourceIndex;
       _dragSourceIndex = null;
 
-      const row = e.target.closest(".rule-order-item");
       let insertAfter = false;
       let targetIndex = null;
 
@@ -428,16 +628,44 @@ function initRuleOrderExpandAndDrag() {
         }
       }
 
-      clearDragIndicators();
       if (targetIndex == null) return;
       moveRuleOrderByDrop(fromIndex, targetIndex, insertAfter);
     });
 
     ruleOrderListEl.addEventListener("dragend", () => {
       _dragSourceIndex = null;
+      _dragSourceBundlePolicy = null;
+      _dragSourceBundleChild = null;
       clearDragIndicators();
     });
   }
+}
+
+function getRuleEntryKindLabel(kind) {
+  switch (kind) {
+    case "GEOSITE":
+      return t("ruleOrderKindGeosite");
+    case "GEOIP":
+      return t("ruleOrderKindGeoip");
+    case "RULE-SET":
+      return t("ruleOrderKindRuleSet");
+    case "MANUAL":
+      return t("ruleOrderKindManual");
+    case "MATCH":
+      return t("ruleOrderKindMatch");
+    default:
+      return kind;
+  }
+}
+
+function getRuleEntryDisplayLabel(entry) {
+  if (entry.kind === "MATCH") return "";
+  if (entry.kind === "GEOIP") {
+    const code = String(entry.key ?? "");
+    const flag = isoToFlag(code);
+    return escapeHtml(flag ? `${flag}\u00A0${code}` : code);
+  }
+  return escapeHtml(String(entry.key ?? ""));
 }
 
 export function renderRuleOrder() {
@@ -457,6 +685,184 @@ export function renderRuleOrder() {
     empty.className = "empty-state";
     empty.textContent = t("ruleOrderEmpty");
     ruleOrderListEl.appendChild(empty);
+    return;
+  }
+
+  if (_ruleOrderGroupMode) {
+    const { bundles, matchEntry } = buildPolicyBundles(items);
+
+    bundles.forEach((bundle, bIdx) => {
+      const wrap = document.createElement("div");
+      wrap.className = "rule-bundle-wrap";
+
+      const row = document.createElement("div");
+      row.className = "rule-order-item rule-bundle-header";
+      row.dataset.bundlePolicy = bundle.policy;
+      if (_lastMovedRuleId === `BUNDLE:${bundle.policy}`) {
+        row.classList.add("is-just-moved");
+      }
+
+      row.draggable = true;
+      row.addEventListener("dragstart", (e) => {
+        if (e.target.closest("button")) {
+          e.preventDefault();
+          return;
+        }
+        _dragSourceBundlePolicy = bundle.policy;
+        _dragSourceIndex = null;
+        row.classList.add("is-dragging");
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", bundle.policy);
+        }
+      });
+
+      const isExpanded = _expandedPolicyBundles.has(bundle.policy);
+      const previewKeys = bundle.entries
+        .slice(0, 3)
+        .map((e) => e.key)
+        .join("、");
+      const moreSuffix = bundle.entries.length > 3 ? " 等" : "";
+
+      row.innerHTML = `
+        <div class="rule-order-main">
+          <span class="drag-handle" title="按住整组拖动调整策略优先级">⋮⋮</span>
+          <span class="rule-order-index">#${bIdx + 1}</span>
+          <span class="pill" style="color:var(--text);font-weight:600">${escapeHtml(
+            bundle.policy
+          )}</span>
+          <span class="rule-order-label" title="包含: ${escapeHtml(
+            previewKeys + moreSuffix
+          )}">共 <b>${bundle.entries.length}</b> 条规则 (${escapeHtml(
+        previewKeys + moreSuffix
+      )})</span>
+        </div>
+        <div class="rule-order-actions"></div>
+      `;
+
+      const actions = row.querySelector(".rule-order-actions");
+
+      const detailBtn = document.createElement("button");
+      detailBtn.type = "button";
+      detailBtn.className = "edge-btn";
+      detailBtn.textContent = isExpanded ? "收起明细" : "展开明细";
+      detailBtn.addEventListener("click", () => {
+        if (_expandedPolicyBundles.has(bundle.policy)) {
+          _expandedPolicyBundles.delete(bundle.policy);
+        } else {
+          _expandedPolicyBundles.add(bundle.policy);
+        }
+        renderRuleOrder();
+      });
+
+      const topBtn = document.createElement("button");
+      topBtn.type = "button";
+      topBtn.className = "edge-btn move-top";
+      topBtn.title = "将该策略组全部规则移至最顶部";
+      topBtn.innerHTML = `⇡ <span>置顶</span>`;
+      topBtn.addEventListener("click", () =>
+        movePolicyBundleToEdge(bundle.policy, "top")
+      );
+
+      const bottomBtn = document.createElement("button");
+      bottomBtn.type = "button";
+      bottomBtn.className = "edge-btn move-bottom";
+      bottomBtn.title = "将该策略组全部规则移至最底部";
+      bottomBtn.innerHTML = `⇣ <span>置底</span>`;
+      bottomBtn.addEventListener("click", () =>
+        movePolicyBundleToEdge(bundle.policy, "bottom")
+      );
+
+      actions.appendChild(detailBtn);
+      actions.appendChild(topBtn);
+      actions.appendChild(bottomBtn);
+      wrap.appendChild(row);
+
+      if (isExpanded) {
+        const childrenBox = document.createElement("div");
+        childrenBox.className = "rule-bundle-children";
+        bundle.entries.forEach((entry, cIdx) => {
+          const childRow = document.createElement("div");
+          childRow.className = "rule-order-item rule-bundle-child";
+          childRow.dataset.childPolicy = bundle.policy;
+          childRow.dataset.childIndex = String(cIdx);
+          if (entry.id && entry.id === _lastMovedRuleId) {
+            childRow.classList.add("is-just-moved");
+          }
+          childRow.draggable = bundle.entries.length > 1;
+          if (bundle.entries.length > 1) {
+            childRow.addEventListener("dragstart", (e) => {
+              if (e.target.closest("button")) {
+                e.preventDefault();
+                return;
+              }
+              _dragSourceBundleChild = { policy: bundle.policy, childIdx: cIdx };
+              _dragSourceBundlePolicy = null;
+              _dragSourceIndex = null;
+              childRow.classList.add("is-dragging");
+              if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", `${bundle.policy}:${cIdx}`);
+              }
+            });
+          }
+          const kindLabel = getRuleEntryKindLabel(entry.kind);
+          const label = getRuleEntryDisplayLabel(entry);
+          childRow.innerHTML = `
+            <div class="rule-order-main">
+              <span class="drag-handle" title="按住可在组内上下拖动">⋮⋮</span>
+              <span class="rule-order-index">${bIdx + 1}.${cIdx + 1}</span>
+              <span class="pill">${kindLabel}</span>
+              <span class="rule-order-label" title="${label}">${label}</span>
+            </div>
+            <div class="rule-order-actions"></div>
+          `;
+          const childActions = childRow.querySelector(".rule-order-actions");
+          if (bundle.entries.length > 1) {
+            const cTop = document.createElement("button");
+            cTop.type = "button";
+            cTop.className = "edge-btn move-top";
+            cTop.innerHTML = `⇡ <span>组内置顶</span>`;
+            cTop.addEventListener("click", () =>
+              moveRuleInsidePolicyBundle(bundle.policy, cIdx, "top")
+            );
+            const cBottom = document.createElement("button");
+            cBottom.type = "button";
+            cBottom.className = "edge-btn move-bottom";
+            cBottom.innerHTML = `⇣ <span>组内置底</span>`;
+            cBottom.addEventListener("click", () =>
+              moveRuleInsidePolicyBundle(bundle.policy, cIdx, "bottom")
+            );
+            childActions.appendChild(cTop);
+            childActions.appendChild(cBottom);
+          }
+          childrenBox.appendChild(childRow);
+        });
+        wrap.appendChild(childrenBox);
+      }
+
+      ruleOrderListEl.appendChild(wrap);
+    });
+
+    if (matchEntry) {
+      const matchRow = document.createElement("div");
+      matchRow.className = "rule-order-item rule-order-match";
+      const policyTag = matchEntry.policy
+        ? ` → <b>${escapeHtml(matchEntry.policy)}</b>`
+        : "";
+      matchRow.innerHTML = `
+        <div class="rule-order-main">
+          <span class="rule-order-index" title="固定在最底部">末尾</span>
+          <span class="pill">${getRuleEntryKindLabel("MATCH")}</span>
+          <span class="rule-order-label">${policyTag}</span>
+        </div>
+        <div class="rule-order-actions"></div>
+      `;
+      ruleOrderListEl.appendChild(matchRow);
+    }
+
+    ruleOrderListEl.scrollTop = prevScrollTop;
+    applyTwemoji(ruleOrderListEl);
     return;
   }
 
@@ -481,6 +887,7 @@ export function renderRuleOrder() {
           return;
         }
         _dragSourceIndex = index;
+        _dragSourceBundlePolicy = null;
         row.classList.add("is-dragging");
         if (e.dataTransfer) {
           e.dataTransfer.effectAllowed = "move";
@@ -489,36 +896,8 @@ export function renderRuleOrder() {
       });
     }
 
-    let kindLabel = "";
-    switch (entry.kind) {
-      case "GEOSITE":
-        kindLabel = t("ruleOrderKindGeosite");
-        break;
-      case "GEOIP":
-        kindLabel = t("ruleOrderKindGeoip");
-        break;
-      case "RULE-SET":
-        kindLabel = t("ruleOrderKindRuleSet");
-        break;
-      case "MANUAL":
-        kindLabel = t("ruleOrderKindManual");
-        break;
-      case "MATCH":
-        kindLabel = t("ruleOrderKindMatch");
-        break;
-    }
-
-    let label = "";
-    if (!isMatch) {
-      if (entry.kind === "GEOIP") {
-        const code = String(entry.key ?? "");
-        const flag = isoToFlag(code);
-        const pretty = flag ? `${flag}\u00A0${code}` : code;
-        label = escapeHtml(pretty);
-      } else {
-        label = escapeHtml(String(entry.key ?? ""));
-      }
-    }
+    const kindLabel = getRuleEntryKindLabel(entry.kind);
+    const label = getRuleEntryDisplayLabel(entry);
 
     const policyTag = entry.policy ? ` → <b>${escapeHtml(entry.policy)}</b>` : "";
     const handleHtml = isMatch

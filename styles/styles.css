@@ -820,7 +820,7 @@ body.rtl .switch {
   display: grid;
   gap: 6px;
   font-size: 13px;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 
 .item {
@@ -1150,19 +1150,43 @@ mark {
   padding: 8px;
   display: grid;
   gap: 6px;
-  height: 240px;
-  max-height: 240px;
+  height: 300px;
+  max-height: 300px;
   min-height: 140px;
   align-content: start;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: auto;
   transition: height 0.15s ease, max-height 0.15s ease;
 }
 
 #rulesOrderList.is-expanded {
   height: auto;
-  min-height: 520px;
+  min-height: 320px;
   max-height: none;
+  overflow: visible;
+  overflow-x: visible;
   overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
+.rule-bundle-wrap {
+  display: grid;
+  gap: 4px;
+}
+
+.rule-bundle-children {
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-strong);
+  display: grid;
+  gap: 4px;
+}
+
+.rule-bundle-child {
+  padding: 5px 8px;
+  font-size: 12px;
+  background: var(--panel-2);
 }
 
 .rule-order-item {
