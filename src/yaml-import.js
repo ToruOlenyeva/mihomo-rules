@@ -532,6 +532,22 @@ export function parseYamlToState(yamlContent) {
   state.manualRules = newManualRules;
   state.rulesGeosite = newRulesGeosite;
   state.rulesGeoip = newRulesGeoip;
+  if (rawProxies.length) {
+    state.proxies = rawProxies.map((rp) => {
+      const copy = { ...rp };
+      if (copy.port != null) copy.port = Number(copy.port) || copy.port;
+      if (typeof copy.udp === "string") copy.udp = copy.udp === "true" || copy.udp === "True";
+      if (typeof copy.tls === "string") copy.tls = copy.tls === "true" || copy.tls === "True";
+      if (typeof copy["skip-cert-verify"] === "string") {
+        copy["skip-cert-verify"] =
+          copy["skip-cert-verify"] === "true" || copy["skip-cert-verify"] === "True";
+      }
+      if (typeof copy.alpn === "string" && copy.alpn.startsWith("[")) {
+        copy.alpn = parseFlowArray(copy.alpn);
+      }
+      return copy;
+    });
+  }
   if (newSubs.length) {
     state.subs = newSubs;
   }

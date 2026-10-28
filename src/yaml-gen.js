@@ -19,6 +19,7 @@ export function emitProxiesYaml(proxies) {
     if (p.port != null) emitKv(lines, "port", p.port, 4, false);
 
     for (const k of [
+      "ports",
       "uuid",
       "password",
       "cipher",
@@ -27,17 +28,21 @@ export function emitProxiesYaml(proxies) {
       "flow",
       "servername",
       "client-fingerprint",
+      "fingerprint",
       "sni",
       "auth_str",
       "auth",
       "token",
       "protocol",
       "obfs",
+      "obfs-password",
       "protocol-param",
       "obfs-param",
       "encryption",
+      "up",
+      "down",
     ])
-      if (k in p) emitKv(lines, k, p[k], 4);
+      if (k in p && p[k] !== undefined && p[k] !== "") emitKv(lines, k, p[k], 4);
 
     if ("tls" in p) emitBool(lines, "tls", !!p.tls, 4);
     if ("udp" in p) emitBool(lines, "udp", !!p.udp, 4);

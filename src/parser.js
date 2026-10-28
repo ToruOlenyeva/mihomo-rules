@@ -585,7 +585,43 @@ export function parseHy(u, hy2 = false) {
   };
 
   if (hy2) {
-    p.password = sanitizeString(stripControlChars(u.username || ""), "");
+    const rawUser = u.username ? decodeURIComponent(u.username) : "";
+    const rawPass = u.password ? decodeURIComponent(u.password) : "";
+    const combinedAuth = rawPass ? (rawUser + ":" + rawPass) : (rawUser || q.auth || "");
+    p.password = sanitizeString(stripControlChars(combinedAuth), "");
+
+    if ("insecure" in q || "allowInsecure" in q || "skip-cert-verify" in q) {
+      const ins = q.insecure ?? q.allowInsecure ?? q["skip-cert-verify"];
+      p["skip-cert-verify"] =
+        ins === "1" || ins === "true" || ins === "True" || ins === "yes";
+    }
+
+    const upRaw = q.upmbps || q["up-mbps"] || q.up || "";
+    const downRaw = q.downmbps || q["down-mbps"] || q.down || "";
+    if (upRaw) {
+      const upNum = parseInt(String(upRaw), 10);
+      p.up = Number.isFinite(upNum) && upNum > 0 ? (upNum + " Mbps") : sanitizeString(upRaw, "");
+    }
+    if (downRaw) {
+      const downNum = parseInt(String(downRaw), 10);
+      p.down = Number.isFinite(downNum) && downNum > 0 ? (downNum + " Mbps") : sanitizeString(downRaw, "");
+    }
+
+    const mportRaw = q.mport || q.ports || "";
+    if (mportRaw) {
+      p.ports = sanitizeString(String(mportRaw).replace(/:/g, "-"), "");
+    }
+
+    const pinRaw = q.pinSHA256 || q.pinsha256 || q.fingerprint || "";
+    if (pinRaw) {
+      p.fingerprint = sanitizeString(pinRaw, "");
+    }
+
+    const fpRaw = q.fp || q["client-fingerprint"] || "";
+    if (fpRaw) {
+      p["client-fingerprint"] = sanitizeString(fpRaw, "");
+    }
+
     const obfsTypeRaw = q.obfs || q["obfs-type"] || q.obfsType || "";
     const obfsPassRaw =
       q["obfs-password"] || q.obfsPassword || q["obfsPassword"] || "";
@@ -593,21 +629,11 @@ export function parseHy(u, hy2 = false) {
     const obfsType = sanitizeString(obfsTypeRaw, "").toLowerCase();
     const obfsPass = sanitizeString(obfsPassRaw, "");
 
-    if (obfsType && obfsType !== "plain") {
+    if (obfsType && obfsType !== "plain" && obfsType !== "none") {
       if (obfsPass) {
         p.obfs = "salamander";
         p["obfs-password"] = obfsPass;
       }
-    }
-    const hasObfsTypeExplicit =
-      "obfs" in q || "obfs-type" in q || "obfsType" in q;
-    if (!hasObfsTypeExplicit) {
-      delete p.obfs;
-      delete p["obfs-password"];
-    }
-    if (p.obfs && !obfsPass) {
-      delete p.obfs;
-      delete p["obfs-password"];
     }
   } else {
     p.auth = sanitizeString(q.auth || "", "");
@@ -641,7 +667,11 @@ export function parseHy(u, hy2 = false) {
       .map((x) => sanitizeString(x.trim(), ""))
       .filter(Boolean);
 
-  if (q.sni) p.servername = sanitizeString(q.sni, "");
+  const sniVal = q.sni || q.peer || "";
+  if (sniVal) {
+    p.sni = sanitizeString(sniVal, "");
+    p.servername = sanitizeString(sniVal, "");
+  }
   p.name = sanitizeString(p.name, p.server || "proxy");
   if (p.password) p.password = sanitizeString(p.password, "");
   if (p.auth) p.auth = sanitizeString(p.auth, "");
@@ -792,6 +822,7 @@ export function parseOne(url) {
       return parseHy(u, false);
 
     case "hy2":
+    case "hysteria2":
       return parseHy(u, true);
 
     case "tuic":
